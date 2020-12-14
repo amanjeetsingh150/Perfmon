@@ -1,8 +1,11 @@
 package com.developers.perfmon
 
-import androidx.appcompat.app.AppCompatActivity
+import android.content.Intent
 import android.os.Bundle
+import android.util.Log
+import androidx.appcompat.app.AppCompatActivity
 import kotlinx.android.synthetic.main.activity_main.*
+
 
 class MainActivity : AppCompatActivity() {
 
@@ -10,11 +13,13 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         button.setOnClickListener {
-            getSysInfo()
+            val cpuTime = getCpuTime()
+            Log.d("Initial CPU Time", "Initial value: $cpuTime")
+            startActivity(Intent(this, DetailsActivity::class.java))
         }
     }
 
-    private external fun getSysInfo(): String
+    private external fun getCpuTime(): Long
 
     companion object {
         private const val PERF_LIB_NAME = "perf"

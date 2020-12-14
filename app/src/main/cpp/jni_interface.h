@@ -8,7 +8,10 @@
 #define PERFMON_JNI_INTERFACE_H
 
 
-extern "C" JNIEXPORT jstring JNICALL Java_com_developers_perfmon_MainActivity_getSysInfo(JNIEnv *env, jobject);
-
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_developers_perfmon_MainActivity_getCpuTime(JNIEnv *env, jobject);
 
 #endif //PERFMON_JNI_INTERFACE_H
+extern "C"
+JNIEXPORT jlong JNICALL
+Java_com_developers_perfmon_DetailsActivity_getCpuTime(JNIEnv *env, jobject thiz);
