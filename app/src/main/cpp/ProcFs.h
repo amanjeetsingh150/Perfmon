@@ -31,7 +31,6 @@ struct TaskStatInfo {
     uint64_t cpuTime;
     ThreadState state;
     uint64_t majorFaults;
-    uint8_t cpuNum;
     uint64_t kernelCpuTimeMs;
     uint64_t minorFaults;
     int16_t threadPriority;

@@ -7,6 +7,7 @@
 #include "fcntl.h"
 #include "system_error"
 #include "android_debug.h"
+#include "common.h"
 
 static constexpr int kMaxProcFileLength = 64;
 
@@ -14,7 +15,6 @@ TaskStatInfo::TaskStatInfo()
         : cpuTime(0),
           state(ThreadState::TS_UNKNOWN),
           majorFaults(0),
-          cpuNum(-1),
           kernelCpuTimeMs(0),
           minorFaults(0),
           threadPriority(999) {}
@@ -43,13 +43,107 @@ char *skipUntil(char *data, const char *end, char ch) {
     return ++data;
 }
 
+inline ThreadState convertCharToStateEnum(char stateChar) {
+    switch (stateChar) {
+        case 'R':
+            return TS_RUNNING;
+        case 'S':
+            return TS_SLEEPING;
+        case 'D':
+            return TS_WAITING;
+        case 'Z':
+            return TS_ZOMBIE;
+        case 'T':
+            return TS_STOPPED;
+        case 't':
+            return TS_TRACING_STOP;
+        case 'X':
+        case 'x':
+            return TS_DEAD;
+        case 'K':
+            return TS_WAKEKILL;
+        case 'W':
+            return TS_WAKING;
+        case 'P':
+            return TS_PARKED;
+        default:
+            return TS_UNKNOWN;
+    }
+}
+
 TaskStatInfo parseStatFile(char *data, size_t size) {
     const char *end = (data + size);
 
-    // TODO: parse stat file
-    LOGD("Hello from C++ %s", data);
+    data = skipUntil(data, end, ' '); // pid
+    data = skipUntil(data, end, ')'); // name
+    data = skipUntil(data, end, ' '); // space after name
+    char state = *data; // state
 
-    return TaskStatInfo();
+    data = skipUntil(data, end, ' '); // state
+    data = skipUntil(data, end, ' '); // ppid
+    data = skipUntil(data, end, ' '); // pgrp
+    data = skipUntil(data, end, ' '); // session
+    data = skipUntil(data, end, ' '); // tty_nr
+    data = skipUntil(data, end, ' '); // tpgid
+
+    data = skipUntil(data, end, ' '); // flags
+
+    char *endptr = nullptr;
+    auto minflt = parse_all(data, &endptr); // minflt
+
+    if (errno == ERANGE || data == endptr || endptr > end) {
+        throw std::runtime_error("Could not parse minflt");
+    }
+
+    data = skipUntil(endptr, end, ' ');
+
+    data = skipUntil(data, end, ' '); // cminflt
+
+    endptr = nullptr;
+    auto majflt = parse_all(data, &endptr); // majflt
+    if (errno == ERANGE || data == endptr || endptr > end) {
+        throw std::runtime_error("Could not parse majflt");
+    }
+    data = skipUntil(endptr, end, ' ');
+
+    data = skipUntil(data, end, ' '); // cmajflt
+
+    endptr = nullptr;
+    auto utime = parse_all(data, &endptr); // utime
+    if (errno == ERANGE || data == endptr || endptr > end) {
+        throw std::runtime_error("Could not parse utime");
+    }
+    data = skipUntil(endptr, end, ' ');
+
+    endptr = nullptr;
+    auto stime = parse_all(data, &endptr); // stime
+    if (errno == ERANGE || data == endptr || endptr > end) {
+        throw std::runtime_error("Could not parse stime");
+    }
+    data = skipUntil(endptr, end, ' ');
+
+    data = skipUntil(data, end, ' '); // cutime
+    data = skipUntil(data, end, ' '); // cstime
+
+    endptr = nullptr;
+    auto priority = strtol(data, &endptr, 10); // priority
+    if (errno == ERANGE || data == endptr || endptr > end) {
+        throw std::runtime_error("Could not parse priority");
+    }
+
+    // SYSTEM_CLK_TCK is defined as 100 in linux as is unchanged in android.
+    // Therefore there are 10 milli seconds in each clock tick.
+    static int kClockTicksMs = systemClockTickIntervalMs();
+
+    TaskStatInfo info{};
+    info.cpuTime = kClockTicksMs * (utime + stime);
+    info.kernelCpuTimeMs = kClockTicksMs * stime;
+    info.state = convertCharToStateEnum(state);
+    info.majorFaults = majflt;
+    info.minorFaults = minflt;
+    info.threadPriority = priority;
+
+    return info;
 }
 
 std::string tidToStatPath(int32_t tid, const char *stat_name) {
